@@ -1,0 +1,42 @@
+name: Daily arXiv digest
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # UTC 00:00 = 北京时间 08:00
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Fetch arXiv feed
+        run: python scripts/fetch_arxiv.py -o /tmp/arxiv_feed.json
+
+      - name: Run daily-arxiv
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude -p "Run /daily-arxiv using the feed at /tmp/arxiv_feed.json."
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add wiki/
+          git diff --cached --quiet || {
+            git commit -m "daily-digest: $(date +%Y-%m-%d)"
+            git push
+          }
